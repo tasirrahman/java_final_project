@@ -1,12 +1,13 @@
 package business.register.app.businessregisterapp;
-
+import io.github.cdimascio.dotenv.Dotenv;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ChoiceBox;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.input.MouseEvent;
-
+import java.sql.*;
 import java.util.regex.Pattern;
 
 public class ForgotPasswordController {
@@ -15,7 +16,7 @@ public class ForgotPasswordController {
     private TextField resetEmail;
 
     @FXML
-    private TextField resetPassword;
+    private PasswordField resetPassword;
 
     @FXML
     private ChoiceBox<String> resetType;
@@ -23,11 +24,14 @@ public class ForgotPasswordController {
     private static final String ROLE_ADMIN = "Admin";
     private static final String ROLE_USER = "User";
 
+    private final Dotenv dotenv = Dotenv.load();
+
     @FXML
     public void initialize() {
         resetType.getItems().addAll(ROLE_ADMIN, ROLE_USER);
         resetType.setValue(ROLE_USER);
     }
+
 
     @FXML
     void resetButton(ActionEvent event) {
@@ -76,12 +80,50 @@ public class ForgotPasswordController {
     }
 
     private boolean resetPassword(String email, String password, String role) {
-        if (role.equals(ROLE_ADMIN) && email.equalsIgnoreCase("admin@example.com")) {
-            return true;
-        } else if (role.equals(ROLE_USER) && email.equalsIgnoreCase("user@example.com")) {
-            return true;
+        try {
+            String url = dotenv.get("DB_URL");
+            String username = dotenv.get("DB_USER");
+            String dbPassword = dotenv.get("DB_PASSWORD");
+            Connection connection = DriverManager.getConnection(
+                    url,
+                    username,
+                    dbPassword
+            );
+
+            // First check if the user exists with the specified email and role
+            String checkQuery = "SELECT * FROM users WHERE email = ? AND role = ?";
+            PreparedStatement checkStatement = connection.prepareStatement(checkQuery);
+            checkStatement.setString(1, email);
+            checkStatement.setString(2, role);
+
+            ResultSet resultSet = checkStatement.executeQuery();
+            boolean userExists = resultSet.next();
+
+            resultSet.close();
+            checkStatement.close();
+
+            if (!userExists) {
+                connection.close();
+                return false;
+            }
+
+            // Update the user's password
+            String updateQuery = "UPDATE users SET password = ? WHERE email = ? AND role = ?";
+            PreparedStatement updateStatement = connection.prepareStatement(updateQuery);
+            updateStatement.setString(1, password);
+            updateStatement.setString(2, email);
+            updateStatement.setString(3, role);
+
+            int rowsAffected = updateStatement.executeUpdate();
+            updateStatement.close();
+            connection.close();
+
+            return rowsAffected > 0;
+
+        } catch (SQLException e) {
+            showAlert(Alert.AlertType.ERROR, "Reset Error", "Database error: " + e.getMessage());
+            return false;
         }
-        return false;
     }
 
     private boolean isValidEmail(String email) {

@@ -1,24 +1,30 @@
 package business.register.app.businessregisterapp;
+import io.github.cdimascio.dotenv.Dotenv;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
 import java.util.regex.Pattern;
+import javafx.scene.control.PasswordField;
+import java.sql.*;
 
 public class LogInController {
     @FXML
     private TextField loginEmail;
     @FXML
-    private TextField loginPassword;
+    private PasswordField loginPassword;
     @FXML
     private ChoiceBox<String> loginType;
     private static final String ROLE_ADMIN = "Admin";
     private static final String ROLE_USER = "User";
+    private final Dotenv dotenv = Dotenv.load();
+
     @FXML
     public void initialize() {
         loginType.getItems().addAll(ROLE_ADMIN, ROLE_USER);
         loginType.setValue(ROLE_USER);
     }
+
     @FXML
     void loginButton(ActionEvent event) {
         String email = loginEmail.getText().trim();
@@ -40,11 +46,6 @@ public class LogInController {
             return;
         }
 
-        if (!isStrongPassword(password)) {
-            showAlert(Alert.AlertType.ERROR, "Validation Error", "Password must be at least 6 characters and include both letters and numbers.");
-            return;
-        }
-
         if (selectedRole == null) {
             showAlert(Alert.AlertType.ERROR, "Validation Error", "Login type is required.");
             return;
@@ -53,7 +54,7 @@ public class LogInController {
         boolean authenticated = authenticate(email, password, selectedRole);
 
         if (authenticated) {
-            showAlert(Alert.AlertType.INFORMATION, "Login Successful", "Welcome " + selectedRole + "!");
+
             if (selectedRole.equals(ROLE_ADMIN)) {
                 HelloApplication.changeScreen("admin-dashboard-screen");
             } else {
@@ -63,18 +64,47 @@ public class LogInController {
             showAlert(Alert.AlertType.ERROR, "Login Failed", "Invalid credentials or role.");
         }
     }
+
     @FXML
     void navigateToForgotPassword(MouseEvent event) {
         HelloApplication.changeScreen("forgot-password-screen");
     }
+
     @FXML
     void navigateToRegister(MouseEvent event) {
         HelloApplication.changeScreen("register-screen");
     }
 
     private boolean authenticate(String email, String password, String role) {
-        return (role.equals(ROLE_ADMIN) && email.equals("admin@example.com") && password.equals("admin123")) ||
-                (role.equals(ROLE_USER) && email.equals("user@example.com") && password.equals("user123"));
+        try {
+            String url = dotenv.get("DB_URL");
+            String username = dotenv.get("DB_USER");
+            String dbPassword = dotenv.get("DB_PASSWORD");
+            Connection connection = DriverManager.getConnection(
+                    url,
+                    username,
+                    dbPassword
+            );
+
+            String query = "SELECT * FROM users WHERE email = ? AND password = ? AND role = ?";
+            PreparedStatement statement = connection.prepareStatement(query);
+            statement.setString(1, email);
+            statement.setString(2, password);
+            statement.setString(3, role);
+
+            ResultSet resultSet = statement.executeQuery();
+            boolean userExists = resultSet.next();
+
+            resultSet.close();
+            statement.close();
+            connection.close();
+
+            return userExists;
+
+        } catch (SQLException e) {
+            showAlert(Alert.AlertType.ERROR, "Login Error", "Database error: " + e.getMessage());
+            return false;
+        }
     }
 
     private boolean isValidEmail(String email) {
