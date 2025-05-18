@@ -94,7 +94,7 @@ public class LogInController {
 
             ResultSet resultSet = statement.executeQuery();
             boolean userExists = resultSet.next();
-
+            UserSession.createSession(email, role);
             resultSet.close();
             statement.close();
             connection.close();
