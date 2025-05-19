@@ -31,7 +31,7 @@ public class HelloApplication extends Application {
             stage.setScene(scene);
             stage.show();
         }  catch (IOException e) {
-           System.out.print("HelloApplication Error.");
+           System.out.print(e);
         }
     }
 }
